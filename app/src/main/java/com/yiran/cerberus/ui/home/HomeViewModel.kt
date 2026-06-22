@@ -277,10 +277,28 @@ class HomeViewModel : ViewModel() {
                 val backupFileName = config.generateBackupFileName()
                 val filePath = "$backupFolder/$backupFileName"
 
-                withContext(Dispatchers.IO) {
+                // 尝试创建目录
+                val mkColResponse = withContext(Dispatchers.IO) {
                     WebDavClient.mkCol(
                         baseUrl = config.serverUrl,
                         folderPath = backupFolder,
+                        username = config.username,
+                        password = config.password,
+                        useHttps = config.useHttps
+                    )
+                }
+
+                // 检查目录创建是否成功（409 表示目录已存在，也是可接受的）
+                if (!mkColResponse.success && mkColResponse.statusCode != 409) {
+                    onError("无法创建目录: ${mkColResponse.errorMessage}")
+                    return@launch
+                }
+
+                // 上传前先删除已存在的文件（如果存在）
+                withContext(Dispatchers.IO) {
+                    WebDavClient.deleteFile(
+                        baseUrl = config.serverUrl,
+                        filePath = filePath,
                         username = config.username,
                         password = config.password,
                         useHttps = config.useHttps
@@ -339,7 +357,11 @@ class HomeViewModel : ViewModel() {
                         folderPath = backupFolder,
                         username = config.username,
                         password = config.password,
-                        useHttps = config.useHttps
+                        useHttps = config.useHttps,
+                        onError = { error ->
+                            // 记录错误但不中断流程
+                            println("WebDAV list error: $error")
+                        }
                     )
                 }
 

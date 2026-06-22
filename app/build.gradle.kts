@@ -43,6 +43,33 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 如果有签名配置则使用
+            if (System.getenv("SIGNING_KEYSTORE_FILE") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        debug {
+            // Debug 签名用于测试
+            isMinifyEnabled = false
+            isDebuggable = true
+        }
+    }
+
+    // 签名配置 - 支持 CI 环境变量
+    signingConfigs {
+        create("release") {
+            // 从环境变量或文件读取签名配置
+            val storeFilePath = System.getenv("SIGNING_KEYSTORE_FILE")
+            val storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+            val keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+            val keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+
+            if (storeFilePath != null && storeFilePath.isNotEmpty()) {
+                storeFile = file(storeFilePath)
+                this.storePassword = storePassword ?: ""
+                this.keyAlias = keyAlias ?: ""
+                this.keyPassword = keyPassword ?: ""
+            }
         }
     }
 }

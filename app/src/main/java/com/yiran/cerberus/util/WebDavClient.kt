@@ -200,7 +200,7 @@ object WebDavClient {
             }
 
             val responseCode = connection.responseCode
-            if (responseCode in 200..299 || responseCode == 405) {
+            if (responseCode in 200..299 || responseCode == 409) {
                 WebDavResponse(success = true, statusCode = responseCode)
             } else {
                 val errorBody = readErrorStream(connection)
@@ -220,7 +220,8 @@ object WebDavClient {
         folderPath: String,
         username: String,
         password: String,
-        useHttps: Boolean = true
+        useHttps: Boolean = true,
+        onError: ((String) -> Unit)? = null
     ): List<BackupFile> {
         return try {
             val url = URL(buildUrl(baseUrl, folderPath, useHttps))
@@ -231,18 +232,19 @@ object WebDavClient {
                 connectTimeout = CONNECTION_TIMEOUT
                 readTimeout = READ_TIMEOUT
                 setRequestProperty("Depth", "1")
+                setRequestProperty("Content-Type", "application/xml; charset=utf-8")
                 setBasicAuth(username, password)
                 doOutput = true
             }
 
             val requestBody = """<?xml version="1.0" encoding="utf-8" ?>
-<D:propfind xmlns:D="DAV:">
-  <D:prop>
-    <D:displayname/>
-    <D:getlastmodified/>
-    <D:getcontentlength/>
-  </D:prop>
-</D:propfind>"""
+<propfind xmlns="DAV:">
+  <prop>
+    <displayname/>
+    <getlastmodified/>
+    <getcontentlength/>
+  </prop>
+</propfind>"""
 
             BufferedOutputStream(connection.outputStream).use { outputStream ->
                 outputStream.write(requestBody.toByteArray(StandardCharsets.UTF_8))
@@ -258,9 +260,13 @@ object WebDavClient {
                 }
                 parsePropfindResponse(responseBody)
             } else {
+                val errorBody = readErrorStream(connection)
+                val errorMsg = "List failed: $responseCode - $errorBody"
+                onError?.invoke(errorMsg)
                 emptyList()
             }
         } catch (e: Exception) {
+            onError?.invoke(e.message ?: "List failed: unknown error")
             emptyList()
         }
     }
@@ -268,18 +274,19 @@ object WebDavClient {
     private fun parsePropfindResponse(responseBody: String): List<BackupFile> {
         val files = mutableListOf<BackupFile>()
         
-        val displayNamePattern = Regex("<D:displayname>([^<]+)</D:displayname>")
-        val lastModifiedPattern = Regex("<D:getlastmodified>([^<]+)</D:getlastmodified>")
-        val contentLengthPattern = Regex("<D:getcontentlength>([^<]+)</D:getcontentlength>")
+        // 支持带命名空间和不带命名空间的两种格式
+        val displayNamePattern = Regex("<(?:D:)?displayname>([^<]+)</(?:D:)?displayname>")
+        val lastModifiedPattern = Regex("<(?:D:)?getlastmodified>([^<]+)</(?:D:)?getlastmodified>")
+        val contentLengthPattern = Regex("<(?:D:)?getcontentlength>([^<]+)</(?:D:)?getcontentlength>")
         
-        val entries = responseBody.split("<D:response>")
-        for (entry in entries.drop(1)) {
+        val entries = responseBody.split("<(?:D:)?response>").filter { it.isNotBlank() }
+        for (entry in entries) {
             val displayNameMatch = displayNamePattern.find(entry)
             val lastModifiedMatch = lastModifiedPattern.find(entry)
             val contentLengthMatch = contentLengthPattern.find(entry)
             
             if (displayNameMatch != null) {
-                val fileName = displayNameMatch.groupValues[1]
+                val fileName = displayNameMatch.groupValues[1].trim()
                 if (fileName.isNotEmpty() && !fileName.startsWith(".") && fileName.endsWith(".cerb")) {
                     val lastModified = try {
                         lastModifiedMatch?.groupValues?.get(1)?.let { parseHttpDate(it) } ?: 0L
