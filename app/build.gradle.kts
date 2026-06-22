@@ -47,49 +47,48 @@ android {
     }
 }
 
-// --- 优化的 Rust 构建集成 ---
-
-val ndkDirProvider = extensions.getByType<com.android.build.api.variant.ApplicationAndroidComponentsExtension>()
-    .sdkComponents.ndkDirectory.map { it.asFile.absolutePath }
-
-tasks.register<Exec>("cargoBuildAndroid") {
-    group = "build"
-    description = "Compile Rust library for Android"
-    workingDir = file("../rust")
-    
-    val ndkPath = ndkDirProvider.getOrElse(System.getenv("ANDROID_NDK_HOME") ?: "")
-    environment("ANDROID_NDK_HOME", ndkPath)
-    
-    val targets = listOf("aarch64-linux-android", "x86_64-linux-android")
-    val archMap = mapOf(
-        "aarch64-linux-android" to "arm64-v8a",
-        "x86_64-linux-android" to "x86_64"
-    )
-
-    commandLine("cargo", "ndk")
-    targets.forEach { target ->
-        args("-t", archMap[target]!!)
-    }
-    args("-o", "${projectDir}/src/main/jniLibs", "build", "--release")
-}
-
-tasks.register<Exec>("generateUniFFIBindings") {
-    group = "build"
-    description = "Generate Kotlin bindings using UniFFI"
-    dependsOn("cargoBuildAndroid")
-    workingDir = file("../rust")
-    
-    commandLine(
-        "cargo", "run", "--bin", "uniffi-bindgen", 
-        "generate", "--library", "target/aarch64-linux-android/release/librust_core.so",
-        "--language", "kotlin", 
-        "--out-dir", "${projectDir}/src/main/java"
-    )
-}
-
-project.afterEvaluate {
-    tasks.findByName("preBuild")?.dependsOn("generateUniFFIBindings")
-}
+// Rust 编译任务已在 CI 中手动执行，这里仅保留配置供参考
+// val ndkDirProvider = extensions.getByType<com.android.build.api.variant.ApplicationAndroidComponentsExtension>()
+//     .sdkComponents.ndkDirectory.map { it.asFile.absolutePath }
+//
+// tasks.register<Exec>("cargoBuildAndroid") {
+//     group = "build"
+//     description = "Compile Rust library for Android"
+//     workingDir = file("../rust")
+//     
+//     val ndkPath = ndkDirProvider.getOrElse(System.getenv("ANDROID_NDK_HOME") ?: "")
+//     environment("ANDROID_NDK_HOME", ndkPath)
+//     
+//     val targets = listOf("aarch64-linux-android", "x86_64-linux-android")
+//     val archMap = mapOf(
+//         "aarch64-linux-android" to "arm64-v8a",
+//         "x86_64-linux-android" to "x86_64"
+//     )
+//
+//     commandLine("cargo", "ndk")
+//     targets.forEach { target ->
+//         args("-t", archMap[target]!!)
+//     }
+//     args("-o", "${projectDir}/src/main/jniLibs", "build", "--release")
+// }
+//
+// tasks.register<Exec>("generateUniFFIBindings") {
+//     group = "build"
+//     description = "Generate Kotlin bindings using UniFFI"
+//     dependsOn("cargoBuildAndroid")
+//     workingDir = file("../rust")
+//     
+//     commandLine(
+//         "cargo", "run", "--bin", "uniffi-bindgen", 
+//         "generate", "--library", "target/aarch64-linux-android/release/librust_core.so",
+//         "--language", "kotlin", 
+//         "--out-dir", "${projectDir}/src/main/java"
+//     )
+// }
+//
+// project.afterEvaluate {
+//     tasks.findByName("preBuild")?.dependsOn("generateUniFFIBindings")
+// }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

@@ -36,24 +36,52 @@ jobs:
         targets: aarch64-linux-android, x86_64-linux-android
 
     - name: Install cargo-ndk
-      uses: baptiste0928/cargo-install@v3
-      with:
-        crate: cargo-ndk
+      run: cargo install cargo-ndk
+
+    - name: Build Rust library
+      working-directory: rust
+      run: |
+        cargo ndk -t arm64-v8a -t x86_64 -o ../app/src/main/jniLibs build --release
+
+    - name: Generate UniFFI Kotlin bindings
+      working-directory: rust
+      run: |
+        cargo run --bin uniffi-bindgen generate --library target/aarch64-linux-android/release/librust_core.so --language kotlin --out-dir ../app/src/main/java
+
+    - name: List generated Kotlin bindings
+      run: |
+        find app/src/main/java -name "*.kt" -path "*/rust_core*" | head -20
+
+    - name: List jniLibs directory
+      run: |
+        ls -la app/src/main/jniLibs/
+        ls -la app/src/main/jniLibs/arm64-v8a/ 2>/dev/null || echo "arm64-v8a not found"
+        ls -la app/src/main/jniLibs/x86_64/ 2>/dev/null || echo "x86_64 not found"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build Release APK
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleRelease --stacktrace
+
+    - name: List build outputs
+      run: |
+        find app/build -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+        ls -la app/build/outputs/apk/release/ 2>/dev/null || echo "Release directory not found"
 
     - name: Upload Release APK
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: app-release
         path: app/build/outputs/apk/release/app-release.apk
 
-    - name: Upload Debug APK (optional)
+    - name: Upload Build Logs
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: build-logs
+        path: |
+          app/build/reports/
+          app/build/outputs/
+        continue-on-error: true
