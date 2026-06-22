@@ -74,6 +74,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${String.format("%.1f", bytes / 1024.0)} KB"
+        else -> "${String.format("%.1f", bytes / (1024.0 * 1024))} MB"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, homeViewModel: HomeViewModel = viewModel()) {
@@ -587,14 +595,6 @@ fun SettingsScreen(onBack: () -> Unit, homeViewModel: HomeViewModel = viewModel(
                 }
             }
         )
-    }
-
-    fun formatFileSize(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${String.format("%.1f", bytes / 1024.0)} KB"
-            else -> "${String.format("%.1f", bytes / (1024.0 * 1024))} MB"
-        }
     }
 
     Scaffold(
